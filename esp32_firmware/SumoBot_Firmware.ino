@@ -24,6 +24,7 @@
 #include <ArduinoOTA.h>
 #include <WebServer.h>
 #include <Update.h>
+#include <esp_arduino_version.h>
 
 // ================= PIN CONFIGURATION =================
 // Motor A (Left Motor)
@@ -41,13 +42,22 @@
 // Status / Debug LED
 #define PIN_LED 2
 
-// PWM Channels & Frequency for ESP32 LEDC
+// PWM Configuration & Channels
 #define PWM_FREQ 20000
 #define PWM_RES  8 // 8-bit resolution (0 - 255)
 #define CH_IN1 0
 #define CH_IN2 1
 #define CH_IN3 2
 #define CH_IN4 3
+
+// Universal ESP32 Core 2.x and 3.x LEDC PWM Compatibility
+#if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
+  #define PWM_INIT(pin, ch) ledcAttach((pin), PWM_FREQ, PWM_RES)
+  #define PWM_WRITE(pin, ch, val) ledcWrite((pin), (val))
+#else
+  #define PWM_INIT(pin, ch) do { ledcSetup((ch), PWM_FREQ, PWM_RES); ledcAttachPin((pin), (ch)); } while(0)
+  #define PWM_WRITE(pin, ch, val) ledcWrite((ch), (val))
+#endif
 
 // ================= NETWORK & UDP =================
 const char* AP_SSID = "SumoBot";
@@ -101,36 +111,36 @@ const char* serverIndex =
 void setMotorOutputs(int leftPWM, int rightPWM) {
   // Left Motor
   if (leftPWM > 0) {
-    ledcWrite(CH_IN1, constrain(leftPWM, 0, 255));
-    ledcWrite(CH_IN2, 0);
+    PWM_WRITE(PIN_IN1, CH_IN1, constrain(leftPWM, 0, 255));
+    PWM_WRITE(PIN_IN2, CH_IN2, 0);
   } else if (leftPWM < 0) {
-    ledcWrite(CH_IN1, 0);
-    ledcWrite(CH_IN2, constrain(-leftPWM, 0, 255));
+    PWM_WRITE(PIN_IN1, CH_IN1, 0);
+    PWM_WRITE(PIN_IN2, CH_IN2, constrain(-leftPWM, 0, 255));
   } else {
-    ledcWrite(CH_IN1, 0);
-    ledcWrite(CH_IN2, 0);
+    PWM_WRITE(PIN_IN1, CH_IN1, 0);
+    PWM_WRITE(PIN_IN2, CH_IN2, 0);
   }
 
   // Right Motor
   if (rightPWM > 0) {
-    ledcWrite(CH_IN3, constrain(rightPWM, 0, 255));
-    ledcWrite(CH_IN4, 0);
+    PWM_WRITE(PIN_IN3, CH_IN3, constrain(rightPWM, 0, 255));
+    PWM_WRITE(PIN_IN4, CH_IN4, 0);
   } else if (rightPWM < 0) {
-    ledcWrite(CH_IN3, 0);
-    ledcWrite(CH_IN4, constrain(-rightPWM, 0, 255));
+    PWM_WRITE(PIN_IN3, CH_IN3, 0);
+    PWM_WRITE(PIN_IN4, CH_IN4, constrain(-rightPWM, 0, 255));
   } else {
-    ledcWrite(CH_IN3, 0);
-    ledcWrite(CH_IN4, 0);
+    PWM_WRITE(PIN_IN3, CH_IN3, 0);
+    PWM_WRITE(PIN_IN4, CH_IN4, 0);
   }
 }
 
 void stopMotors() {
   currentLeftSpeed = 0.0f;
   currentRightSpeed = 0.0f;
-  ledcWrite(CH_IN1, 0);
-  ledcWrite(CH_IN2, 0);
-  ledcWrite(CH_IN3, 0);
-  ledcWrite(CH_IN4, 0);
+  PWM_WRITE(PIN_IN1, CH_IN1, 0);
+  PWM_WRITE(PIN_IN2, CH_IN2, 0);
+  PWM_WRITE(PIN_IN3, CH_IN3, 0);
+  PWM_WRITE(PIN_IN4, CH_IN4, 0);
 }
 
 // ================= WEB OTA SETUP =================
@@ -198,16 +208,11 @@ void setup() {
   pinMode(PIN_LED, OUTPUT);
   digitalWrite(PIN_LED, LOW);
 
-  // Configure Motor PWM channels
-  ledcSetup(CH_IN1, PWM_FREQ, PWM_RES);
-  ledcSetup(CH_IN2, PWM_FREQ, PWM_RES);
-  ledcSetup(CH_IN3, PWM_FREQ, PWM_RES);
-  ledcSetup(CH_IN4, PWM_FREQ, PWM_RES);
-
-  ledcAttachPin(PIN_IN1, CH_IN1);
-  ledcAttachPin(PIN_IN2, CH_IN2);
-  ledcAttachPin(PIN_IN3, CH_IN3);
-  ledcAttachPin(PIN_IN4, CH_IN4);
+  // Configure Motor PWM
+  PWM_INIT(PIN_IN1, CH_IN1);
+  PWM_INIT(PIN_IN2, CH_IN2);
+  PWM_INIT(PIN_IN3, CH_IN3);
+  PWM_INIT(PIN_IN4, CH_IN4);
   stopMotors();
 
   // Configure Access Point
